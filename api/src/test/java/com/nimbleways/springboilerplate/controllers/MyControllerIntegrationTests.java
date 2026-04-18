@@ -57,6 +57,37 @@ public class MyControllerIntegrationTests {
                 assertEquals(resultOrder.getId(), order.getId());
         }
 
+        @Test
+        public void processOrderShouldApplyMixedProductRules() throws Exception {
+                List<Product> products = new ArrayList<>();
+                products.add(new Product(null, 3, 2, "NORMAL", "Normal In Stock", null, null, null));
+                products.add(new Product(null, 4, 0, "NORMAL", "Normal Out Of Stock", null, null, null));
+                products.add(new Product(
+                                null, 2, 1, "SEASONAL", "Seasonal In Season", null,
+                                LocalDate.now().minusDays(1), LocalDate.now().plusDays(2)
+                ));
+                products.add(new Product(
+                                null, 2, 5, "SEASONAL", "Seasonal Outside Season", null,
+                                LocalDate.now().plusDays(5), LocalDate.now().plusDays(20)
+                ));
+                products.add(new Product(null, 1, 1, "EXPIRABLE", "Expirable Valid", LocalDate.now().plusDays(1), null, null));
+                products.add(new Product(null, 1, 5, "EXPIRABLE", "Expirable Expired", LocalDate.now().minusDays(1), null, null));
+
+                productRepository.saveAll(products);
+                Order order = orderRepository.save(createOrder(new HashSet<Product>(products)));
+
+                mockMvc.perform(post("/orders/{orderId}/processOrder", order.getId())
+                                .contentType("application/json"))
+                                .andExpect(status().isOk());
+
+                assertEquals(Integer.valueOf(1), productRepository.findFirstByName("Normal In Stock").orElseThrow().getAvailable());
+                assertEquals(Integer.valueOf(0), productRepository.findFirstByName("Normal Out Of Stock").orElseThrow().getAvailable());
+                assertEquals(Integer.valueOf(0), productRepository.findFirstByName("Seasonal In Season").orElseThrow().getAvailable());
+                assertEquals(Integer.valueOf(5), productRepository.findFirstByName("Seasonal Outside Season").orElseThrow().getAvailable());
+                assertEquals(Integer.valueOf(0), productRepository.findFirstByName("Expirable Valid").orElseThrow().getAvailable());
+                assertEquals(Integer.valueOf(0), productRepository.findFirstByName("Expirable Expired").orElseThrow().getAvailable());
+        }
+
         private static Order createOrder(Set<Product> products) {
                 Order order = new Order();
                 order.setItems(products);

@@ -1,19 +1,13 @@
 package com.nimbleways.springboilerplate.contollers;
 
+import com.nimbleways.springboilerplate.config.exceptions.AppException;
+import com.nimbleways.springboilerplate.config.logging.Log;
+import com.nimbleways.springboilerplate.config.logging.LogFactory;
 import com.nimbleways.springboilerplate.dto.product.ProcessOrderResponse;
-import com.nimbleways.springboilerplate.entities.Order;
-import com.nimbleways.springboilerplate.entities.Product;
-import com.nimbleways.springboilerplate.repositories.OrderRepository;
-import com.nimbleways.springboilerplate.repositories.ProductRepository;
-import com.nimbleways.springboilerplate.services.implementations.ProductService;
 
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import com.nimbleways.springboilerplate.services.spec.OrderServiceI;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,53 +17,25 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/orders")
 public class MyController {
-    @Autowired
-    private ProductService ps;
 
-    @Autowired
-    private ProductRepository pr;
+    private final Log log= LogFactory.get(MyController.class);
 
-    @Autowired
-    private OrderRepository or;
+
+    private final OrderServiceI orderService;
+
+    public MyController(OrderServiceI orderService) {
+        this.orderService = orderService;
+    }
 
     @PostMapping("{orderId}/processOrder")
     @ResponseStatus(HttpStatus.OK)
-    public ProcessOrderResponse processOrder(@PathVariable Long orderId) {
-        Order order = or.findById(orderId).get();
-        System.out.println(order);
-        List<Long> ids = new ArrayList<>();
-        ids.add(orderId);
-        Set<Product> products = order.getItems();
-        for (Product p : products) {
-            if (p.getType().equals("NORMAL")) {
-                if (p.getAvailable() > 0) {
-                    p.setAvailable(p.getAvailable() - 1);
-                    pr.save(p);
-                } else {
-                    int leadTime = p.getLeadTime();
-                    if (leadTime > 0) {
-                        ps.notifyDelay(leadTime, p);
-                    }
-                }
-            } else if (p.getType().equals("SEASONAL")) {
-                // Add new season rules
-                if ((LocalDate.now().isAfter(p.getSeasonStartDate()) && LocalDate.now().isBefore(p.getSeasonEndDate())
-                        && p.getAvailable() > 0)) {
-                    p.setAvailable(p.getAvailable() - 1);
-                    pr.save(p);
-                } else {
-                    ps.handleSeasonalProduct(p);
-                }
-            } else if (p.getType().equals("EXPIRABLE")) {
-                if (p.getAvailable() > 0 && p.getExpiryDate().isAfter(LocalDate.now())) {
-                    p.setAvailable(p.getAvailable() - 1);
-                    pr.save(p);
-                } else {
-                    ps.handleExpiredProduct(p);
-                }
-            }
+    public ResponseEntity<ProcessOrderResponse> processOrder(@PathVariable Long orderId) {
+        log.info("Received order processing request [ id= " + orderId +"]");
+        try {
+            return new ResponseEntity<ProcessOrderResponse>(orderService.processOrder(orderId),HttpStatus.OK);
         }
-
-        return new ProcessOrderResponse(order.getId());
+        catch (AppException e) {
+            return new ResponseEntity<ProcessOrderResponse>(e.getHttpCode());
+        }
     }
 }

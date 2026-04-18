@@ -1,5 +1,6 @@
 package com.nimbleways.springboilerplate.entities;
 
+import com.nimbleways.springboilerplate.services.spec.ProductProcessor;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -38,4 +39,6 @@ public class Product {
 
     @Column(name = "season_end_date")
     private LocalDate seasonEndDate;
+
+
 }
